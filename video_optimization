@@ -1,0 +1,96 @@
+#This program discards repititive frames acquired by the camera. 
+#Application example: In an ATM where the CCTV unit should store the video input when someone enters the ATM or exits or performs some actions.
+
+from picamera.array import PiRGBArray
+from picamera import PiCamera
+import time
+import sys
+sys.path.append('/usr/local/lib/python2.7/site-packages')
+import cv2
+
+from numpy import *
+
+import shutil
+
+col = 640
+row = 480
+
+
+# initialize the camera and grab a reference to the raw camera capture
+camera = PiCamera()
+camera.resolution = (col, row)
+camera.framerate = 4
+rawCapture = PiRGBArray(camera, size=(col, row))
+frames = []
+sub = []
+# allow the camera to warmup
+time.sleep(0.1)
+i=0
+# capture frames from the camera
+for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
+	# grab the raw NumPy array representing the image, then initialize the timestamp
+	# and occupied/unoccupied text
+	image = frame.array
+	gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+	# show the frame
+	cv2.imshow("Frame", gray)
+	cv2.imwrite("/home/pi/all-frames/Frame%s.jpg" %i, gray)
+
+	frames.append(gray)
+	
+	i+=1
+	
+	key = cv2.waitKey(1) & 0xFF
+
+	# clear the stream in preparation for the next frame
+	rawCapture.truncate(0)
+
+
+	# if the `q` key was pressed, break from the loop
+	if key == ord("q"):
+		break
+
+frames = array(frames)
+addall = []
+discarded = []
+for w in xrange(0,i):
+    discarded.append(0)
+accepted = []
+for k in xrange(0,i):
+    accepted.append(0)
+
+factor = 0.05
+n=0
+m=0
+
+thresh = col * row * factor
+
+for l in xrange(0,100):
+    addall.append(0)
+
+
+for x in range(1,i):
+        sub = cv2.subtract(frames[x],frames[(x-1)])
+        for a in range(0,row):
+                for b in range(0,col):
+                        addall[x] = addall[x] + sub[a,b]
+        print"Subtracted matrix %s is" %x
+        print sub
+                
+        print "Calculated value is"
+        addall[x]=addall[x]/100
+        print addall[x]
+
+        if addall[x] <= thresh : print "Frame %s discarded" %x ; discarded[n] = x; n = n+1; print "________________" ; shutil.copy('/home/pi/all-frames/Frame%s.jpg' %x, '/home/pi/discarded') #if the value is less than threshold the frame number is saved in discarded array #shutil.copy2('home/pi/Frame1.jpg.', 'home/pi/discarded')
+
+        if addall[x] >=thresh : print "Frame %s accepted" %x ; accepted[m] = x; m= m+1; print "________________" ; shutil.copy('/home/pi/all-frames/Frame%s.jpg' %x, '/home/pi/accepted') #if the value is greater than the threshold frame number is saved in accepted array
+
+        
+print "Calculated values are: "
+print addall
+
+print "Discarded frames:"
+print discarded
+
+print "Accepted frames:"
+print accepted
